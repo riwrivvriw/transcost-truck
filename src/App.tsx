@@ -97,17 +97,30 @@ const SelectField = ({ label, value, onChange, options, id }: any) => (
   </div>
 );
 
+// --- Utility Functions (Module Level) ---
+const formatCurrency = (val: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(val);
+
 // --- Main App ---
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'new-job' | 'history' | 'settings' | 'empty-trip-solution'>('new-job');
   const [settings, setSettings] = useState<BusinessSettings>(() => {
-    const saved = localStorage.getItem('transcost_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    try {
+      const saved = localStorage.getItem('transcost_settings');
+      return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    } catch (e) {
+      console.error('Failed to load settings from localStorage', e);
+      return DEFAULT_SETTINGS;
+    }
   });
   const [savedJobs, setSavedJobs] = useState<TransportJob[]>(() => {
-    const saved = localStorage.getItem('transcost_jobs');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('transcost_jobs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load jobs from localStorage', e);
+      return [];
+    }
   });
 
   const [simTarget, setSimTarget] = useState<number>(15);
@@ -260,8 +273,6 @@ export default function App() {
     setActiveTab('new-job');
   };
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(val);
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20 md:pb-0">
       <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto bg-white border-t md:border-t-0 md:border-b border-slate-200 z-50">
@@ -364,7 +375,7 @@ export default function App() {
                         onChange={(val: number) => setCurrentJob(prev => ({ ...prev, distancePerTrip: val }))} 
                       />
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <InputField 
                         id="input-trips"
                         label="จำนวนเที่ยว/เดือน" 
@@ -378,13 +389,6 @@ export default function App() {
                         suffix="บาท"
                         value={currentJob.pricePerTrip} 
                         onChange={(val: number) => setCurrentJob(prev => ({ ...prev, pricePerTrip: val }))} 
-                      />
-                      <InputField 
-                        id="input-utilization"
-                        label="อัตราการใช้งานรถ" 
-                        suffix="%"
-                        value={currentJob.utilizationRate || 100} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, utilizationRate: val }))} 
                       />
                     </div>
 
@@ -572,7 +576,7 @@ export default function App() {
                     </Card>
                     <Card className="p-6 bg-slate-50 border-slate-200">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ต้นทุนผันแปร (Variable / km)</div>
-                      <div className="text-2xl font-black text-slate-900">{calculation.variableCostPerKm?.toFixed(2) || "0.00"} <span className="text-sm font-medium text-slate-400">บาท</span></div>
+                      <div className="text-2xl font-black text-slate-900">{((calculation.variableCostPerTrip ?? 0) / (currentJob.distancePerTrip || 1)).toFixed(2)} <span className="text-sm font-medium text-slate-400">บาท</span></div>
                       <div className="text-[10px] text-slate-400 mt-1 font-medium italic">น้ำมัน/ค่าแรง/ซ่อมบำรุง</div>
                     </Card>
                   </div>
@@ -597,7 +601,7 @@ export default function App() {
                                 { name: 'ซ่อมบำรุง', value: currentJob.maintenanceCost * currentJob.tripsPerMonth, color: '#d946ef' },
                                 { name: 'ค่าเสื่อม', value: calculation.depreciationPerTrip * currentJob.tripsPerMonth, color: '#ec4899' },
                                 { name: 'คงที่อื่นๆ', value: (currentJob.otherCosts + calculation.fixedCostPerTrip - calculation.depreciationPerTrip) * currentJob.tripsPerMonth, color: '#f43f5e' },
-                              ]}
+                              ].filter(d => d.value > 0)}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
