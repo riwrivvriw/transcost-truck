@@ -1,0 +1,5 @@
+{
+  "name": "TransCost Truck",
+  "description": "Decision support system for road transport SMEs to calculate costs, break-even points, and profit margins.",
+  "requestFramePermissions": []
+}
