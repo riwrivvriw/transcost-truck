@@ -21,7 +21,7 @@ import {
   ArrowRight,
   Zap
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart, 
   Bar, 
@@ -55,7 +55,7 @@ const Card = ({ children, className, id }: { children: React.ReactNode, classNam
   </div>
 );
 
-const InputField = ({ label, value, onChange, type = "number", suffix, placeholder, id, readOnly, disabled }: any) => (
+const InputField = ({ label, value, onChange, type = "number", suffix, placeholder, id }: any) => (
   <div className="space-y-1.5">
     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
     <div className="relative">
@@ -65,11 +65,8 @@ const InputField = ({ label, value, onChange, type = "number", suffix, placehold
         value={value}
         onChange={(e) => onChange && onChange(type === "number" ? parseFloat(e.target.value) || 0 : e.target.value)}
         placeholder={placeholder}
-        readOnly={readOnly}
-        disabled={disabled}
         className={cn(
-          "w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none text-slate-900 font-medium",
-          readOnly || disabled ? "bg-slate-100 cursor-not-allowed text-slate-500" : "bg-slate-50"
+          "w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none text-slate-900 font-medium bg-slate-50"
         )}
       />
       {suffix && (
@@ -105,22 +102,12 @@ const formatCurrency = (val: number) => new Intl.NumberFormat('th-TH', { style: 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'new-job' | 'history' | 'settings' | 'empty-trip-solution'>('new-job');
   const [settings, setSettings] = useState<BusinessSettings>(() => {
-    try {
-      const saved = localStorage.getItem('transcost_settings');
-      return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-    } catch (e) {
-      console.error('Failed to load settings from localStorage', e);
-      return DEFAULT_SETTINGS;
-    }
+    const saved = localStorage.getItem('transcost_settings');
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
   const [savedJobs, setSavedJobs] = useState<TransportJob[]>(() => {
-    try {
-      const saved = localStorage.getItem('transcost_jobs');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error('Failed to load jobs from localStorage', e);
-      return [];
-    }
+    const saved = localStorage.getItem('transcost_jobs');
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [simTarget, setSimTarget] = useState<number>(15);
@@ -229,9 +216,11 @@ export default function App() {
   }, [calculation, isFuelHigh]);
 
   const emptyTripSim = useMemo(() => {
+    // Current empty trip loss is calculated in utils (assumed 20%)
+    // Let's simulate reducing it by 10% and 20%
     const currentLoss = calculation.emptyTripLoss * currentJob.tripsPerMonth;
-    const reduced10 = currentLoss * 0.5; 
-    const reduced20 = 0; 
+    const reduced10 = currentLoss * 0.5; // Reducing 20% to 10% is 50% reduction in loss
+    const reduced20 = 0; // Reducing 20% to 0% is 100% reduction in loss
     
     return {
       current: currentLoss,
@@ -275,6 +264,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20 md:pb-0">
+      {/* Sidebar / Top Nav */}
       <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-auto bg-white border-t md:border-t-0 md:border-b border-slate-200 z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center h-16">
@@ -334,6 +324,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               className="grid grid-cols-1 lg:grid-cols-12 gap-6"
             >
+              {/* Left Column: Input */}
               <div className="lg:col-span-4 space-y-6">
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-6">
@@ -375,7 +366,7 @@ export default function App() {
                         onChange={(val: number) => setCurrentJob(prev => ({ ...prev, distancePerTrip: val }))} 
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <InputField 
                         id="input-trips"
                         label="จำนวนเที่ยว/เดือน" 
@@ -398,7 +389,7 @@ export default function App() {
                         label="ระยะทางรวมที่วิ่งต่อเดือน" 
                         suffix="กม."
                         value={currentJob.totalMonthlyDistance} 
-                        readOnly
+                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, totalMonthlyDistance: val }))}
                       />
                       <p className="text-[10px] text-slate-400 font-medium">
                         คำนวณอัตโนมัติจาก ระยะทางไป-กลับ × จำนวนเที่ยวต่อเดือน
@@ -456,53 +447,85 @@ export default function App() {
                       onChange={(val: number) => setCurrentJob(prev => ({ ...prev, otherCosts: val }))} 
                     />
 
-                    <hr className="border-slate-100 my-4" />
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">ข้อมูลรถ (เพื่อคิดค่าเสื่อม)</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField 
-                        id="input-purchase-price"
-                        label="ราคารถที่ซื้อ" 
-                        suffix="บาท"
-                        value={currentJob.truckInfo.purchasePrice} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, purchasePrice: val } }))} 
-                      />
-                      <InputField 
-                        id="input-resale-value"
-                        label="ราคาขายต่อ" 
-                        suffix="บาท"
-                        value={currentJob.truckInfo.resaleValue} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, resaleValue: val } }))} 
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField 
-                        id="input-loan-amount"
-                        label="ยอดจัดไฟแนนซ์" 
-                        suffix="บาท"
-                        value={currentJob.truckInfo.vehicleLoanAmount || 0} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, vehicleLoanAmount: val } }))} 
-                      />
-                      <InputField 
-                        id="input-interest-rate"
-                        label="ดอกเบี้ยรายปี" 
-                        suffix="%"
-                        value={(currentJob.truckInfo.annualInterestRate || 0) * 100} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, annualInterestRate: val / 100 } }))} 
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <InputField 
-                        id="input-life-years"
-                        label="อายุการใช้งาน" 
-                        suffix="ปี"
-                        value={currentJob.truckInfo.expectedLifeYears} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, expectedLifeYears: val } }))} 
-                      />
-                      <div className="flex items-end pb-1">
+                    <hr className="border-slate-100 my-6" />
+                    
+                    <div className="space-y-8">
+                      {/* Section 1: Asset Information */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+                            <Truck className="w-5 h-5 text-indigo-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">ข้อมูลทรัพย์สินรถ (Asset Information)</h3>
+                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tight">ใช้สำหรับคำนวณค่าเสื่อมของรถ</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <InputField 
+                            id="input-purchase-price"
+                            label="ราคารถที่ซื้อ" 
+                            suffix="บาท"
+                            value={currentJob.truckInfo.purchasePrice} 
+                            onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, purchasePrice: val } }))} 
+                          />
+                          <InputField 
+                            id="input-resale-value"
+                            label="ราคาขายต่อ" 
+                            suffix="บาท"
+                            value={currentJob.truckInfo.resaleValue} 
+                            onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, resaleValue: val } }))} 
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <InputField 
+                            id="input-life-years"
+                            label="อายุการใช้งาน" 
+                            suffix="ปี"
+                            value={currentJob.truckInfo.expectedLifeYears} 
+                            onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, expectedLifeYears: val } }))} 
+                          />
+                        </div>
+                      </div>
+
+                      <hr className="border-slate-100" />
+
+                      {/* Section 2: Finance Information */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
+                            <DollarSign className="w-5 h-5 text-emerald-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">ข้อมูลทางการเงิน (Finance Information)</h3>
+                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tight">ใช้สำหรับคำนวณดอกเบี้ยกรณีจัดไฟแนนซ์</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <InputField 
+                            id="input-loan-amount"
+                            label="ยอดจัดไฟแนนซ์" 
+                            suffix="บาท"
+                            value={currentJob.truckInfo.vehicleLoanAmount || 0} 
+                            onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, vehicleLoanAmount: val } }))} 
+                          />
+                          <InputField 
+                            id="input-interest-rate"
+                            label="ดอกเบี้ยรายปี" 
+                            suffix="%"
+                            value={(currentJob.truckInfo.annualInterestRate || 0) * 100} 
+                            onChange={(val: number) => setCurrentJob(prev => ({ ...prev, truckInfo: { ...prev.truckInfo, annualInterestRate: val / 100 } }))} 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
                         <button 
                           id="btn-save-job"
                           onClick={saveJob}
-                          className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+                          className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
                         >
                           <Save className="w-4 h-4" />
                           บันทึกงาน
@@ -513,99 +536,97 @@ export default function App() {
                 </Card>
               </div>
 
+              {/* Right Column: Analysis */}
               <div className="lg:col-span-8 space-y-10">
-                <section className="space-y-4">
+                {/* 1️⃣ Hero Metrics Section */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <LayoutDashboard className="w-3 h-3 text-indigo-600" />
+                    สรุปผลการดำเนินงานรายเดือน (Hero Metrics)
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="p-8 bg-emerald-600 text-white border-none shadow-xl shadow-emerald-100 flex flex-col justify-center items-center text-center">
-                      <div className="text-xs font-bold text-emerald-100 uppercase tracking-widest mb-2">กำไรสุทธิต่อเดือน</div>
-                      <div className="text-4xl font-black">{formatCurrency(calculation.profitPerMonth)}</div>
-                      <div className="text-xs text-emerald-100/70 mt-2 font-medium">หลังหักค่าใช้จ่ายทั้งหมดแล้ว</div>
+                    <Card className="p-6 bg-indigo-600 text-white border-none shadow-indigo-200 shadow-lg">
+                      <div className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-2">กำไรสุทธิต่อเดือน</div>
+                      <div className="text-4xl font-black tracking-tight">
+                        {formatCurrency(calculation.profitPerMonth)}
+                      </div>
+                      <div className="text-[10px] text-indigo-200 mt-2 font-medium">
+                        {calculation.marginPercent.toFixed(1)}% Profit Margin
+                      </div>
                     </Card>
-                    <Card className="p-8 bg-slate-900 text-white border-none shadow-xl shadow-slate-200 flex flex-col justify-center items-center text-center">
+                    <Card className="p-6 bg-white border-slate-200">
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">ต้นทุนรวมต่อเดือน</div>
-                      <div className="text-4xl font-black">{formatCurrency(monthlyCostStructure.total)}</div>
-                      <div className="text-xs text-slate-500 mt-2 font-medium">รวมต้นทุนคงที่และผันแปร</div>
+                      <div className="text-4xl font-black text-slate-900 tracking-tight">
+                        {formatCurrency(monthlyCostStructure.total)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-2 font-medium">
+                        รวมต้นทุนคงที่และผันแปร
+                      </div>
                     </Card>
-                    <Card className="p-8 bg-white border-slate-200 shadow-xl shadow-slate-100 flex flex-col justify-center items-center text-center">
+                    <Card className="p-6 bg-white border-slate-200">
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">จุดคุ้มทุน (BEP)</div>
-                      <div className="text-4xl font-black text-indigo-600">{Math.ceil(calculation.bepTripsPerMonth)} <span className="text-lg">เที่ยว</span></div>
-                      <div className="text-xs text-slate-400 mt-2 font-medium">จำนวนเที่ยวขั้นต่ำต่อเดือน</div>
+                      <div className="text-4xl font-black text-slate-900 tracking-tight">
+                        {calculation.bepTripsPerMonth === -1 ? (
+                          <span className="text-xl text-red-500">ไม่สามารถคืนทุนได้</span>
+                        ) : (
+                          <>
+                            {Math.ceil(calculation.bepTripsPerMonth)} <span className="text-lg font-bold text-slate-400">เที่ยว</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-2 font-medium">
+                        {calculation.bepTripsPerMonth === -1 ? "ต้นทุนผันแปรสูงกว่ารายได้" : "จำนวนเที่ยวขั้นต่ำต่อเดือน"}
+                      </div>
                     </Card>
                   </div>
+                </div>
 
-                  <Card className={cn(
-                    "p-4 border-l-8",
-                    calculation.status === 'accept' ? "border-l-emerald-500 bg-emerald-50/30" : 
-                    calculation.status === 'warning' ? "border-l-amber-500 bg-amber-50/30" : "border-l-rose-500 bg-rose-50/30"
-                  )}>
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                        calculation.status === 'accept' ? "bg-emerald-100 text-emerald-600" : 
-                        calculation.status === 'warning' ? "bg-amber-100 text-amber-600" : "bg-rose-100 text-rose-600"
-                      )}>
-                        {calculation.status === 'accept' ? <CheckCircle2 className="w-6 h-6" /> : 
-                         calculation.status === 'warning' ? <AlertTriangle className="w-6 h-6" /> : <XCircle className="w-6 h-6" />}
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-black tracking-tight">
-                          {calculation.status === 'accept' ? "ราคานี้ไม่ขาดทุน" : 
-                           calculation.status === 'warning' ? "กำไรน้อย - ควรระวัง" : "งานนี้เสี่ยงขาดทุน"}
-                        </h2>
-                        <p className="text-xs text-slate-600 font-medium">
-                          {calculation.status === 'accept' ? "กำไรอยู่ในเกณฑ์ดี สามารถรับงานได้เลย" : 
-                           calculation.status === 'warning' ? "กำไรต่ำกว่า 15% ควรพิจารณาปรับราคาหรือลดต้นทุน" : "ต้นทุนสูงกว่าราคาที่เรียกเก็บ ไม่แนะนำให้รับงานนี้"}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </section>
-
-                <section className="space-y-4">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">ประสิทธิภาพต้นทุน (Cost Efficiency)</h3>
+                {/* 2️⃣ Cost Efficiency Section */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Scale className="w-3 h-3 text-indigo-600" />
+                    ประสิทธิภาพต้นทุน (Cost Efficiency)
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="p-6 bg-slate-50 border-slate-200">
+                    <Card className="p-5 bg-slate-50 border-slate-200">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ต้นทุนต่อกิโลเมตร (รวม)</div>
-                      <div className="text-2xl font-black text-slate-900">{calculation.costPerKm?.toFixed(2) || "0.00"} <span className="text-sm font-medium text-slate-400">บาท</span></div>
-                      <div className="text-[10px] text-slate-400 mt-1 font-medium italic">ต้นทุนรวมเฉลี่ยต่อ 1 กม.</div>
+                      <div className="text-2xl font-black text-slate-900">{calculation.costPerKm.toFixed(2)} <span className="text-sm font-bold text-slate-400">บ./กม.</span></div>
                     </Card>
-                    <Card className="p-6 bg-slate-50 border-slate-200">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ต้นทุนคงที่ (Fixed / km)</div>
-                      <div className="text-2xl font-black text-slate-900">{calculation.fixedCostPerKm?.toFixed(2) || "0.00"} <span className="text-sm font-medium text-slate-400">บาท</span></div>
-                      <div className="text-[10px] text-slate-400 mt-1 font-medium italic">ค่าเสื่อม/ดอกเบี้ย/ประกัน/ภาษี</div>
+                    <Card className="p-5 bg-slate-50 border-slate-200">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ต้นทุนคงที่ต่อกิโลเมตร</div>
+                      <div className="text-2xl font-black text-slate-900">{calculation.fixedCostPerKm?.toFixed(2) || '0.00'} <span className="text-sm font-bold text-slate-400">บ./กม.</span></div>
                     </Card>
-                    <Card className="p-6 bg-slate-50 border-slate-200">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ต้นทุนผันแปร (Variable / km)</div>
-                      <div className="text-2xl font-black text-slate-900">{((calculation.variableCostPerTrip ?? 0) / (currentJob.distancePerTrip || 1)).toFixed(2)} <span className="text-sm font-medium text-slate-400">บาท</span></div>
-                      <div className="text-[10px] text-slate-400 mt-1 font-medium italic">น้ำมัน/ค่าแรง/ซ่อมบำรุง</div>
+                    <Card className="p-5 bg-slate-50 border-slate-200">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ต้นทุนผันแปรต่อกิโลเมตร</div>
+                      <div className="text-2xl font-black text-slate-900">{(calculation.variableCostPerTrip / (currentJob.distancePerTrip || 1)).toFixed(2)} <span className="text-sm font-bold text-slate-400">บ./กม.</span></div>
                     </Card>
                   </div>
-                </section>
+                </div>
 
-                <section className="space-y-6 py-4">
-                  <div className="text-center space-y-1">
-                    <h3 className="text-xl font-black text-slate-900">โครงสร้างต้นทุนรวมต่อเดือน</h3>
-                    <p className="text-sm text-slate-500">สัดส่วนค่าใช้จ่ายที่เกิดขึ้นจริงในการดำเนินงาน</p>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-                    <div className="md:col-span-5">
-                      <div className="h-64 relative">
+                {/* 3️⃣ Cost Structure Visualization */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
+                    โครงสร้างต้นทุนรวมต่อเดือน
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Pie Chart */}
+                    <Card className="p-6">
+                      <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
                               data={[
                                 { name: 'น้ำมัน', value: currentJob.fuelCost * currentJob.tripsPerMonth, color: '#6366f1' },
-                                { name: 'ค่าแรง', value: currentJob.driverWage * currentJob.tripsPerMonth, color: '#8b5cf6' },
+                                { name: 'ค่าแรง', value: (settings.driverPaymentMode === DriverPaymentMode.MONTHLY_SALARY ? settings.avgDriverWage : currentJob.driverWage * currentJob.tripsPerMonth), color: '#8b5cf6' },
                                 { name: 'ทางด่วน', value: currentJob.tollFees * currentJob.tripsPerMonth, color: '#a855f7' },
                                 { name: 'ซ่อมบำรุง', value: currentJob.maintenanceCost * currentJob.tripsPerMonth, color: '#d946ef' },
-                                { name: 'ค่าเสื่อม', value: calculation.depreciationPerTrip * currentJob.tripsPerMonth, color: '#ec4899' },
-                                { name: 'คงที่อื่นๆ', value: (currentJob.otherCosts + calculation.fixedCostPerTrip - calculation.depreciationPerTrip) * currentJob.tripsPerMonth, color: '#f43f5e' },
-                              ].filter(d => d.value > 0)}
+                                { name: 'ค่าเสื่อม', value: calculation.depreciationPerMonth, color: '#ec4899' },
+                                { name: 'อื่นๆ', value: (currentJob.otherCosts * currentJob.tripsPerMonth) + (calculation.fixedCostPerTrip * currentJob.tripsPerMonth - (settings.driverPaymentMode === DriverPaymentMode.MONTHLY_SALARY ? settings.avgDriverWage : 0)), color: '#f43f5e' },
+                              ]}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
-                              outerRadius={90}
+                              outerRadius={80}
                               paddingAngle={5}
                               dataKey="value"
                             >
@@ -619,73 +640,68 @@ export default function App() {
                             />
                           </PieChart>
                         </ResponsiveContainer>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">ต้นทุนรวม</span>
-                          <span className="text-lg font-black text-slate-900">{formatCurrency(monthlyCostStructure.total)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4">
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
+                          <div className="w-2 h-2 rounded-full bg-indigo-500" /> น้ำมัน: {((currentJob.fuelCost * currentJob.tripsPerMonth / monthlyCostStructure.total) * 100).toFixed(1)}%
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
+                          <div className="w-2 h-2 rounded-full bg-pink-500" /> ค่าเสื่อม: {((calculation.depreciationPerMonth / monthlyCostStructure.total) * 100).toFixed(1)}%
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="md:col-span-7 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-indigo-500" />
-                              <span className="text-xs font-bold text-slate-600">น้ำมัน</span>
-                            </div>
-                            <span className="text-xs font-black text-slate-900">{((currentJob.fuelCost / calculation.totalCostPerTrip) * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-pink-500" />
-                              <span className="text-xs font-bold text-slate-600">ค่าเสื่อม</span>
-                            </div>
-                            <span className="text-xs font-black text-slate-900">{((calculation.depreciationPerTrip / calculation.totalCostPerTrip) * 100).toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                              <span className="text-xs font-bold text-slate-600">Fixed Cost</span>
-                            </div>
-                            <span className="text-xs font-black text-slate-900">{monthlyCostStructure.fixedPercent.toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-amber-500" />
-                              <span className="text-xs font-bold text-slate-600">Variable</span>
-                            </div>
-                            <span className="text-xs font-black text-slate-900">{monthlyCostStructure.variablePercent.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-slate-500">ต้นทุนคงที่รายเดือน</span>
-                          <span className="font-bold text-slate-900">{formatCurrency(monthlyCostStructure.fixed)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium text-slate-500">ต้นทุนผันแปรรายเดือน</span>
-                          <span className="font-bold text-slate-900">{formatCurrency(monthlyCostStructure.variable)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
+                    </Card>
 
-                <section className="space-y-6 pt-6 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      <Zap className="w-6 h-6 text-amber-500" />
-                      เครื่องมือวิเคราะห์เชิงกลยุทธ์
-                    </h3>
-                  </div>
+                    {/* Monthly Cost Breakdown List */}
+                    <Card className="p-6 bg-slate-50 border-slate-200 flex flex-col justify-center">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-end">
+                            <label className="text-sm font-bold text-slate-700">ต้นทุนคงที่ (Fixed Cost)</label>
+                            <span className="text-sm font-black text-slate-900">{formatCurrency(monthlyCostStructure.fixed)}</span>
+                          </div>
+                          <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${monthlyCostStructure.fixedPercent}%` }}
+                              className="h-full bg-indigo-500"
+                            />
+                          </div>
+                        </div>
 
-                  <div className="grid grid-cols-1 gap-6">
-                    <Card className="p-6 bg-slate-900 text-white border-none shadow-xl">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-end">
+                            <label className="text-sm font-bold text-slate-700">ต้นทุนผันแปร (Variable Cost)</label>
+                            <span className="text-sm font-black text-slate-900">{formatCurrency(monthlyCostStructure.variable)}</span>
+                          </div>
+                          <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${monthlyCostStructure.variablePercent}%` }}
+                              className="h-full bg-emerald-500"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-slate-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-400 uppercase">ต้นทุนรวมทั้งหมด</span>
+                            <span className="text-xl font-black text-indigo-600">{formatCurrency(monthlyCostStructure.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* 4️⃣ Advanced Analysis Tools */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
+                    เครื่องมือวิเคราะห์เชิงกลยุทธ์
+                  </h3>
+                  
+                  <div className="space-y-6">
+                    {/* Empty Trip Insight */}
+                    <Card className="p-6 bg-slate-900 text-white border-none">
                       <div className="flex flex-col md:flex-row gap-6">
                         <div className="flex-1 space-y-4">
                           <div className="flex items-start gap-4">
@@ -714,7 +730,7 @@ export default function App() {
                         
                         <div className="md:w-64 bg-indigo-500/10 p-5 rounded-2xl border border-indigo-500/20 flex flex-col justify-center">
                           <p className="text-xs font-medium text-indigo-200 text-center mb-3 italic">
-                            "หางานขากลับเพียง 2 เที่ยว/เดือน กำไรจะเพิ่มขึ้นประมาณ {formatCurrency(calculation.profitPerTrip * 2)} บาท"
+                            "หากสามารถหางานขากลับได้เพียง 2 เที่ยว/เดือน กำไรจะเพิ่มขึ้นประมาณ {formatCurrency(calculation.profitPerTrip * 2)} บาท"
                           </p>
                           <button 
                             onClick={() => setActiveTab('empty-trip-solution')}
@@ -726,22 +742,59 @@ export default function App() {
                       </div>
                     </Card>
 
-                    <Card className="p-6 bg-indigo-900 text-white border-none overflow-visible relative shadow-xl">
-                      <div className="absolute -top-3 -right-3 w-12 h-12 bg-amber-400 rounded-2xl flex items-center justify-center shadow-xl rotate-12">
-                        <Scale className="w-6 h-6 text-indigo-900" />
-                      </div>
-                      <div className="flex flex-col md:flex-row gap-8 items-center">
-                        <div className="flex-1 space-y-4 w-full">
-                          <div>
-                            <h3 className="font-bold text-xl flex items-center gap-2">
-                              What-if: ทดลองปรับราคา
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Sensitivity Analysis */}
+                      <Card className="p-6">
+                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-indigo-600" />
+                          ถ้าน้ำมันขึ้น กำไรจะเป็นอย่างไร?
+                        </h3>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={sensitivity}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="percent" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} />
+                              <YAxis hide />
+                              <Tooltip 
+                                cursor={{ fill: '#f8fafc' }}
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="bg-white p-3 rounded-xl shadow-xl border border-slate-100">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ราคาน้ำมัน {payload[0].payload.fuelPrice} บ.</p>
+                                        <p className="text-sm font-black text-slate-900">กำไร: {formatCurrency(payload[0].value as number)}</p>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                                {sensitivity.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.profit > 0 ? (index === 4 ? '#4f46e5' : '#818cf8') : '#f43f5e'} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-4 font-medium italic">
+                          * ตัวเลขนี้ใช้ต่อรองกับลูกค้าได้ หากราคาน้ำมันเปลี่ยนไปจากปัจจุบัน
+                        </p>
+                      </Card>
+
+                      {/* What-if: Price Adjustment */}
+                      <Card className="p-6 bg-indigo-900 text-white border-none flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-lg flex items-center gap-2">
+                              <Scale className="w-5 h-5 text-amber-400" />
+                              What-if: ปรับราคา
                             </h3>
-                            <p className="text-indigo-200 text-sm">ลองปรับราคาต่อเที่ยวเพื่อดูผลกำไรที่เปลี่ยนไป</p>
                           </div>
                           <div className="space-y-2">
-                            <div className="flex justify-between text-xs font-bold text-indigo-300 uppercase">
+                            <div className="flex justify-between text-[10px] font-bold text-indigo-300 uppercase">
                               <span>ลดราคา</span>
-                              <span>ราคาปัจจุบัน</span>
+                              <span>{priceAdjustment >= 0 ? '+' : ''}{priceAdjustment.toLocaleString()}</span>
                               <span>เพิ่มราคา</span>
                             </div>
                             <input 
@@ -753,121 +806,76 @@ export default function App() {
                               onChange={(e) => setPriceAdjustment(parseInt(e.target.value))}
                               className="w-full h-2 bg-indigo-700 rounded-lg appearance-none cursor-pointer accent-amber-400"
                             />
-                            <div className="flex justify-between text-lg font-black">
-                              <span className="text-rose-400">-5,000</span>
-                              <span className="text-white">{priceAdjustment >= 0 ? '+' : ''}{priceAdjustment.toLocaleString()}</span>
-                              <span className="text-emerald-400">+5,000</span>
-                            </div>
                           </div>
                         </div>
-                        <div className="shrink-0 bg-white/10 p-6 rounded-2xl border border-white/10 text-center min-w-[200px]">
-                          <div className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">กำไรต่อเดือนจะเปลี่ยนเป็น</div>
+                        <div className="mt-6 bg-white/10 p-4 rounded-xl border border-white/10 text-center">
+                          <div className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">กำไรต่อเดือนใหม่</div>
                           <div className={cn(
-                            "text-3xl font-black",
+                            "text-2xl font-black",
                             calculation.profitPerMonth >= 0 ? "text-emerald-400" : "text-rose-400"
                           )}>
                             {formatCurrency(calculation.profitPerMonth)}
                           </div>
-                          <div className="text-xs font-medium text-indigo-200 mt-2">
-                            {priceAdjustment !== 0 ? (
-                              <>
-                                {priceAdjustment > 0 ? 'เพิ่มขึ้น ' : 'ลดลง '}
-                                <span className="font-bold text-white">
-                                  {formatCurrency(Math.abs(calculation.profitPerMonth - baseCalculation.profitPerMonth))}
-                                </span>
-                              </>
-                            ) : 'เลื่อนแถบเพื่อดูผลลัพธ์'}
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Card className="p-6">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                          <Scale className="w-4 h-4 text-indigo-600" />
-                          เปรียบเทียบต้นทุนน้ำมัน (Benchmark)
-                        </h3>
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-end">
-                            <div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase">ต้นทุนของคุณ</div>
-                              <div className={cn(
-                                "text-2xl font-black",
-                                isFuelHigh ? "text-rose-500" : "text-emerald-500"
-                              )}>
-                                {calculation.fuelCostPerKm?.toFixed(2) || "0.00"} <span className="text-sm font-medium text-slate-400">บ./กม.</span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-[10px] font-bold text-slate-400 uppercase">ค่าเฉลี่ยอุตสาหกรรม</div>
-                              <div className="text-xl font-bold text-slate-400">
-                                {currentBenchmark.fuelPerKm.toFixed(1)} <span className="text-xs font-medium">บ./กม.</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={cn(
-                                "absolute top-0 left-0 h-full transition-all duration-500",
-                                isFuelHigh ? "bg-rose-500" : "bg-emerald-500"
-                              )}
-                              style={{ width: `${Math.min((calculation.fuelCostPerKm / (currentBenchmark.fuelPerKm * 1.5)) * 100, 100)}%` }}
-                            />
-                            <div 
-                              className="absolute top-0 h-full w-0.5 bg-slate-400 z-10"
-                              style={{ left: `${(currentBenchmark.fuelPerKm / (currentBenchmark.fuelPerKm * 1.5)) * 100}%` }}
-                            />
-                          </div>
-                          
-                          <p className="text-xs font-medium text-slate-500">
-                            {isFuelHigh 
-                              ? "⚠️ ต้นทุนน้ำมันของคุณสูงกว่าค่าเฉลี่ย ควรตรวจสอบการกินน้ำมันหรือพฤติกรรมการขับขี่" 
-                              : "✅ ต้นทุนน้ำมันของคุณอยู่ในระดับปกติหรือดีกว่าค่าเฉลี่ย"}
-                          </p>
                         </div>
                       </Card>
-
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                          <Zap className="w-3 h-3 text-amber-500" />
-                          คำแนะนำเชิงตัดสินใจ (Actionable Insights)
-                        </h3>
-                        <div className="grid grid-cols-1 gap-3">
-                          {recommendations.map((rec, i) => (
-                            <Card key={i} className={cn(
-                              "p-3 border-l-4",
-                              rec.type === 'danger' ? "border-l-rose-500 bg-rose-50/50" : 
-                              rec.type === 'warning' ? "border-l-amber-500 bg-amber-50/50" : "border-l-emerald-500 bg-emerald-50/50"
-                            )}>
-                              <div className="flex gap-3">
-                                <div className={cn(
-                                  "mt-0.5",
-                                  rec.type === 'danger' ? "text-rose-600" : 
-                                  rec.type === 'warning' ? "text-amber-600" : "text-emerald-600"
-                                )}>
-                                  {rec.type === 'danger' ? <XCircle className="w-3 h-3" /> : 
-                                   rec.type === 'warning' ? <AlertTriangle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-                                </div>
-                                <div>
-                                  <p className="text-xs font-bold text-slate-900 leading-tight">{rec.text}</p>
-                                  <p className={cn(
-                                    "text-[10px] font-medium mt-1",
-                                    rec.type === 'danger' ? "text-rose-700" : 
-                                    rec.type === 'warning' ? "text-amber-700" : "text-emerald-700"
-                                  )}>
-                                    💡 {rec.action}
-                                  </p>
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   </div>
-                </section>
+                </div>
+
+                {/* Recommendations & Decision Summary (Moved to bottom or integrated) */}
+                <div className="pt-10 border-t border-slate-200 space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+                      calculation.status === 'accept' ? "bg-emerald-100 text-emerald-600" : 
+                      calculation.status === 'warning' ? "bg-amber-100 text-amber-600" : "bg-rose-100 text-rose-600"
+                    )}>
+                      {calculation.status === 'accept' ? <CheckCircle2 className="w-7 h-7" /> : 
+                       calculation.status === 'warning' ? <AlertTriangle className="w-7 h-7" /> : <XCircle className="w-7 h-7" />}
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black tracking-tight">
+                        {calculation.status === 'accept' ? "ราคานี้ไม่ขาดทุน" : 
+                         calculation.status === 'warning' ? "กำไรน้อย - ควรระวัง" : "งานนี้เสี่ยงขาดทุน"}
+                      </h2>
+                      <p className="text-sm text-slate-500 font-medium">
+                        {calculation.status === 'accept' ? "กำไรอยู่ในเกณฑ์ดี สามารถรับงานได้เลย" : 
+                         calculation.status === 'warning' ? "กำไรต่ำกว่า 15% ควรพิจารณาปรับราคาหรือลดต้นทุน" : "ต้นทุนสูงกว่าราคาที่เรียกเก็บ ไม่แนะนำให้รับงานนี้"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {recommendations.map((rec, i) => (
+                      <Card key={i} className={cn(
+                        "p-4 border-l-4",
+                        rec.type === 'danger' ? "border-l-rose-500 bg-rose-50/50" : 
+                        rec.type === 'warning' ? "border-l-amber-500 bg-amber-50/50" : "border-l-emerald-500 bg-emerald-50/50"
+                      )}>
+                        <div className="flex gap-3">
+                          <div className={cn(
+                            "mt-0.5",
+                            rec.type === 'danger' ? "text-rose-600" : 
+                            rec.type === 'warning' ? "text-amber-600" : "text-emerald-600"
+                          )}>
+                            {rec.type === 'danger' ? <XCircle className="w-4 h-4" /> : 
+                             rec.type === 'warning' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">{rec.text}</p>
+                            <p className={cn(
+                              "text-xs font-medium mt-1",
+                              rec.type === 'danger' ? "text-rose-700" : 
+                              rec.type === 'warning' ? "text-amber-700" : "text-emerald-700"
+                            )}>
+                              💡 {rec.action}
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -983,9 +991,10 @@ export default function App() {
                   กลับไปที่การคำนวณ
                 </button>
                 <h2 className="text-2xl font-black tracking-tight">แนวทางลดเที่ยวเปล่า (Empty Trip Solution)</h2>
-                <div className="w-20" /> 
+                <div className="w-20" /> {/* Spacer */}
               </div>
 
+              {/* 1. Current Situation */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="p-6 bg-slate-900 text-white border-none">
                   <div className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">สัดส่วนเที่ยวเปล่า</div>
@@ -1005,6 +1014,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* 2. Practical Solutions */}
                 <div className="lg:col-span-7 space-y-4">
                   <h3 className="font-bold text-lg flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500" />
@@ -1032,6 +1042,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* 3. Simulation / What-if */}
                 <div className="lg:col-span-5 space-y-4">
                   <h3 className="font-bold text-lg flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-indigo-600" />
@@ -1045,6 +1056,11 @@ export default function App() {
                           <button
                             key={target}
                             onClick={() => {
+                              // Local simulation logic
+                              const currentLoss = calculation.emptyTripLoss * (currentJob.tripsPerMonth * 0.2);
+                              const targetLoss = calculation.emptyTripLoss * (currentJob.tripsPerMonth * (target / 100));
+                              const saved = currentLoss - targetLoss;
+                              
                               setSimTarget(target);
                             }}
                             className={cn(
@@ -1079,6 +1095,7 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* 4. Action Recommendation */}
                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                       <div className="flex gap-3">
                         <Info className="w-5 h-5 text-indigo-600 shrink-0" />
@@ -1196,32 +1213,7 @@ export default function App() {
                   >
                     บันทึกข้อมูลและเริ่มคำนวณ
                   </button>
-                  <button 
-                    id="btn-load-test-data"
-                    onClick={() => {
-                      setSettings(DEFAULT_SETTINGS);
-                      setCurrentJob(prev => ({
-                        ...prev,
-                        productType: 'งานทดสอบระบบ',
-                        weightPerTrip: 15,
-                        distancePerTrip: 300,
-                        tripsPerMonth: 20,
-                        pricePerTrip: 18000,
-                        fuelCost: 2250,
-                        driverWage: 0,
-                        tollFees: 500,
-                        maintenanceCost: 600,
-                        otherCosts: 0,
-                        truckInfo: DEFAULT_TRUCK_INFO,
-                        totalMonthlyDistance: 6000,
-                        utilizationRate: 100
-                      }));
-                      setActiveTab('new-job');
-                    }}
-                    className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-all border border-slate-200"
-                  >
-                    โหลดข้อมูลทดสอบระบบ (Test Data)
-                  </button>
+
                 </div>
               </Card>
 
@@ -1241,6 +1233,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Floating Action Button for Mobile */}
       <div className="md:hidden fixed bottom-20 right-4">
         <button 
           onClick={() => setActiveTab('new-job')}
