@@ -80,7 +80,6 @@ export const calculateJob = (
 
   // 6. Unit Costs
   const costPerKm = totalCostPerTrip / (distancePerTrip || 1);
-  const costPerTon = totalCostPerTrip / (safeNumber(job.weightPerTrip) || 1);
 
   // 7. Break Even Point (BEP)
   const monthlyFixedTotal = totalFixedPerMonth + depreciationPerMonth;
@@ -128,7 +127,6 @@ export const calculateJob = (
     profitPerMonth: safeNumber(profitPerMonth),
     marginPercent: safeNumber(marginPercent),
     costPerKm: safeNumber(costPerKm),
-    costPerTon: safeNumber(costPerTon),
     bepKmPerMonth: safeNumber(bepKmPerMonth),
     bepTripsPerMonth: safeNumber(bepTripsPerMonth),
     emptyTripLoss: safeNumber(emptyTripLoss),

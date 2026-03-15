@@ -31,7 +31,7 @@ export const TRUCK_PRESETS: Record<TruckType, {
 };
 
 export const DEFAULT_SETTINGS: BusinessSettings = {
-  businessName: 'กิจการขนส่งทดสอบ',
+  businessName: 'หจก.ลุงอ้วนขนส่ง',
   mainTruckType: TruckType.SIX_WHEELER,
   truckCount: 1,
   avgDriverWage: 18000,

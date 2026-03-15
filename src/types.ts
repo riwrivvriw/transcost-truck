@@ -33,7 +33,6 @@ export interface TransportJob {
   id: string;
   date: string;
   productType: string;
-  weightPerTrip: number;
   distancePerTrip: number;
   tripsPerMonth: number;
   pricePerTrip: number;
@@ -45,6 +44,7 @@ export interface TransportJob {
   truckInfo: TruckInfo;
   totalMonthlyDistance?: number;
   utilizationRate?: number;
+  emptyTripsPerMonth: number;
 }
 
 export interface CalculationResult {
@@ -58,7 +58,6 @@ export interface CalculationResult {
   profitPerMonth: number;
   marginPercent: number;
   costPerKm: number;
-  costPerTon: number;
   bepKmPerMonth: number;
   bepTripsPerMonth: number;
   emptyTripLoss: number;

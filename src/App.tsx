@@ -115,8 +115,7 @@ export default function App() {
   const [currentJob, setCurrentJob] = useState<TransportJob>({
     id: crypto.randomUUID(),
     date: new Date().toISOString(),
-    productType: 'งานทดสอบระบบ',
-    weightPerTrip: 15,
+    productType: 'หิน ปูน ทราย',
     distancePerTrip: 300,
     tripsPerMonth: 20,
     pricePerTrip: 18000,
@@ -127,7 +126,8 @@ export default function App() {
     otherCosts: 0,
     truckInfo: DEFAULT_TRUCK_INFO,
     totalMonthlyDistance: 6000,
-    utilizationRate: 100
+    utilizationRate: 100,
+    emptyTripsPerMonth: 4
   });
 
   useEffect(() => {
@@ -170,6 +170,18 @@ export default function App() {
       variablePercent: (variableMonthly / (totalMonthly || 1)) * 100
     };
   }, [calculation, adjustedJob.tripsPerMonth]);
+
+  const costBreakdown = useMemo(() => {
+    const data = [
+      { name: 'น้ำมัน', value: adjustedJob.fuelCost * adjustedJob.tripsPerMonth, color: '#6366f1' },
+      { name: 'ค่าแรง', value: (settings.driverPaymentMode === DriverPaymentMode.MONTHLY_SALARY ? settings.avgDriverWage : adjustedJob.driverWage * adjustedJob.tripsPerMonth), color: '#8b5cf6' },
+      { name: 'ทางด่วน', value: adjustedJob.tollFees * adjustedJob.tripsPerMonth, color: '#a855f7' },
+      { name: 'ซ่อมบำรุง', value: adjustedJob.maintenanceCost * adjustedJob.tripsPerMonth, color: '#d946ef' },
+      { name: 'ค่าเสื่อม', value: calculation.depreciationPerMonth, color: '#ec4899' },
+      { name: 'อื่นๆ', value: (adjustedJob.otherCosts * adjustedJob.tripsPerMonth) + (calculation.fixedCostPerTrip * adjustedJob.tripsPerMonth - (settings.driverPaymentMode === DriverPaymentMode.MONTHLY_SALARY ? settings.avgDriverWage : 0)), color: '#f43f5e' },
+    ];
+    return data.filter(item => item.value > 0);
+  }, [adjustedJob, settings, calculation]);
 
   // Benchmark values (Internal system defaults)
   const benchmarks = {
@@ -216,18 +228,21 @@ export default function App() {
   }, [calculation, isFuelHigh]);
 
   const emptyTripSim = useMemo(() => {
-    // Current empty trip loss is calculated in utils (assumed 20%)
-    // Let's simulate reducing it by 10% and 20%
-    const currentLoss = calculation.emptyTripLoss * currentJob.tripsPerMonth;
-    const reduced10 = currentLoss * 0.5; // Reducing 20% to 10% is 50% reduction in loss
-    const reduced20 = 0; // Reducing 20% to 0% is 100% reduction in loss
+    const currentEmptyPercent = currentJob.tripsPerMonth > 0 ? (currentJob.emptyTripsPerMonth / currentJob.tripsPerMonth) * 100 : 0;
+    
+    // Profit gain = (Current Empty Trips - Target Empty Trips) * Profit Per Trip
+    const target10Trips = currentJob.tripsPerMonth * 0.1;
+    const target0Trips = 0;
+    
+    const gain10 = Math.max(0, currentJob.emptyTripsPerMonth - target10Trips) * calculation.profitPerTrip;
+    const gain20 = Math.max(0, currentJob.emptyTripsPerMonth - target0Trips) * calculation.profitPerTrip;
     
     return {
-      current: currentLoss,
-      gain10: currentLoss - reduced10,
-      gain20: currentLoss - reduced20
+      percent: currentEmptyPercent.toFixed(0),
+      gain10,
+      gain20
     };
-  }, [calculation, currentJob.tripsPerMonth]);
+  }, [calculation.profitPerTrip, currentJob.emptyTripsPerMonth, currentJob.tripsPerMonth]);
 
   const usePreset = (type: TruckType) => {
     const preset = TRUCK_PRESETS[type];
@@ -350,23 +365,14 @@ export default function App() {
                       value={currentJob.productType} 
                       onChange={(val: string) => setCurrentJob(prev => ({ ...prev, productType: val }))} 
                     />
+                    <InputField 
+                      id="input-distance"
+                      label="ระยะทางไป-กลับ" 
+                      suffix="กม."
+                      value={currentJob.distancePerTrip} 
+                      onChange={(val: number) => setCurrentJob(prev => ({ ...prev, distancePerTrip: val }))} 
+                    />
                     <div className="grid grid-cols-2 gap-4">
-                      <InputField 
-                        id="input-weight"
-                        label="น้ำหนักบรรทุก" 
-                        suffix="ตัน"
-                        value={currentJob.weightPerTrip} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, weightPerTrip: val }))} 
-                      />
-                      <InputField 
-                        id="input-distance"
-                        label="ระยะทางไป-กลับ" 
-                        suffix="กม."
-                        value={currentJob.distancePerTrip} 
-                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, distancePerTrip: val }))} 
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
                       <InputField 
                         id="input-trips"
                         label="จำนวนเที่ยว/เดือน" 
@@ -376,10 +382,17 @@ export default function App() {
                       />
                       <InputField 
                         id="input-price"
-                        label="ราคาที่เก็บลูกค้า" 
-                        suffix="บาท"
+                        label="ราคาที่เก็บลูกค้า (บาท/เที่ยว)" 
+                        suffix="บาท/เที่ยว"
                         value={currentJob.pricePerTrip} 
                         onChange={(val: number) => setCurrentJob(prev => ({ ...prev, pricePerTrip: val }))} 
+                      />
+                      <InputField 
+                        id="input-empty-trips"
+                        label="จำนวนเที่ยวเปล่าต่อเดือน" 
+                        suffix="เที่ยว"
+                        value={currentJob.emptyTripsPerMonth} 
+                        onChange={(val: number) => setCurrentJob(prev => ({ ...prev, emptyTripsPerMonth: val }))} 
                       />
                     </div>
 
@@ -615,14 +628,7 @@ export default function App() {
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
-                              data={[
-                                { name: 'น้ำมัน', value: currentJob.fuelCost * currentJob.tripsPerMonth, color: '#6366f1' },
-                                { name: 'ค่าแรง', value: (settings.driverPaymentMode === DriverPaymentMode.MONTHLY_SALARY ? settings.avgDriverWage : currentJob.driverWage * currentJob.tripsPerMonth), color: '#8b5cf6' },
-                                { name: 'ทางด่วน', value: currentJob.tollFees * currentJob.tripsPerMonth, color: '#a855f7' },
-                                { name: 'ซ่อมบำรุง', value: currentJob.maintenanceCost * currentJob.tripsPerMonth, color: '#d946ef' },
-                                { name: 'ค่าเสื่อม', value: calculation.depreciationPerMonth, color: '#ec4899' },
-                                { name: 'อื่นๆ', value: (currentJob.otherCosts * currentJob.tripsPerMonth) + (calculation.fixedCostPerTrip * currentJob.tripsPerMonth - (settings.driverPaymentMode === DriverPaymentMode.MONTHLY_SALARY ? settings.avgDriverWage : 0)), color: '#f43f5e' },
-                              ]}
+                              data={costBreakdown}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
@@ -630,8 +636,8 @@ export default function App() {
                               paddingAngle={5}
                               dataKey="value"
                             >
-                              {[0,1,2,3,4,5].map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'][index]} />
+                              {costBreakdown.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
                               ))}
                             </Pie>
                             <Tooltip 
@@ -642,12 +648,12 @@ export default function App() {
                         </ResponsiveContainer>
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                          <div className="w-2 h-2 rounded-full bg-indigo-500" /> น้ำมัน: {((currentJob.fuelCost * currentJob.tripsPerMonth / monthlyCostStructure.total) * 100).toFixed(1)}%
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                          <div className="w-2 h-2 rounded-full bg-pink-500" /> ค่าเสื่อม: {((calculation.depreciationPerMonth / monthlyCostStructure.total) * 100).toFixed(1)}%
-                        </div>
+                        {costBreakdown.map((item, index) => (
+                          <div key={index} className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} /> 
+                            {item.name}: {((item.value / (monthlyCostStructure.total || 1)) * 100).toFixed(1)}%
+                          </div>
+                        ))}
                       </div>
                     </Card>
 
@@ -711,7 +717,7 @@ export default function App() {
                             <div>
                               <h3 className="font-bold text-lg mb-1">Insight: เที่ยวเปล่า (Empty Trip)</h3>
                               <p className="text-slate-400 text-sm leading-relaxed">
-                                ปัจจุบันคุณมีเที่ยวเปล่าประมาณ 20% หากสามารถหางานขากลับได้เพิ่มขึ้น จะช่วยเพิ่มกำไรได้มหาศาล
+                                ปัจจุบันคุณมีเที่ยวเปล่าประมาณ {emptyTripSim.percent}% ของการวิ่งทั้งหมด หากสามารถหางานขากลับได้เพิ่มขึ้น จะช่วยเพิ่มกำไรได้มหาศาล
                               </p>
                             </div>
                           </div>
@@ -998,17 +1004,17 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="p-6 bg-slate-900 text-white border-none">
                   <div className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">สัดส่วนเที่ยวเปล่า</div>
-                  <div className="text-3xl font-black">20%</div>
-                  <div className="text-[10px] text-slate-400 mt-1">ประเมินจากระยะทางไป-กลับ</div>
+                  <div className="text-3xl font-black">{currentJob.tripsPerMonth > 0 ? ((currentJob.emptyTripsPerMonth / currentJob.tripsPerMonth) * 100).toFixed(0) : 0}%</div>
+                  <div className="text-[10px] text-slate-400 mt-1">คำนวณจากข้อมูลที่คุณกรอก</div>
                 </Card>
                 <Card className="p-6 bg-rose-600 text-white border-none">
                   <div className="text-xs font-bold text-rose-200 uppercase tracking-widest mb-1">ต้นทุนที่สูญเสีย/เดือน</div>
-                  <div className="text-3xl font-black">{formatCurrency(calculation.emptyTripLoss * (currentJob.tripsPerMonth * 0.2))}</div>
+                  <div className="text-3xl font-black">{formatCurrency(calculation.emptyTripLoss * currentJob.emptyTripsPerMonth)}</div>
                   <div className="text-[10px] text-rose-200/70 mt-1">เงินที่หายไปจากค่าน้ำมันและค่าเสื่อม</div>
                 </Card>
                 <Card className="p-6 bg-white border-slate-200">
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">ผลกระทบต่อกำไร</div>
-                  <div className="text-3xl font-black text-rose-600">-{((calculation.emptyTripLoss * 0.2 / (calculation.profitPerTrip || 1)) * 100).toFixed(1)}%</div>
+                  <div className="text-3xl font-black text-rose-600">-{currentJob.emptyTripsPerMonth > 0 ? ((calculation.emptyTripLoss * currentJob.emptyTripsPerMonth / (calculation.profitPerMonth || 1)) * 100).toFixed(1) : 0}%</div>
                   <div className="text-[10px] text-slate-400 mt-1">กำไรที่หายไปเมื่อเทียบกับกำไรปัจจุบัน</div>
                 </Card>
               </div>
@@ -1056,11 +1062,6 @@ export default function App() {
                           <button
                             key={target}
                             onClick={() => {
-                              // Local simulation logic
-                              const currentLoss = calculation.emptyTripLoss * (currentJob.tripsPerMonth * 0.2);
-                              const targetLoss = calculation.emptyTripLoss * (currentJob.tripsPerMonth * (target / 100));
-                              const saved = currentLoss - targetLoss;
-                              
                               setSimTarget(target);
                             }}
                             className={cn(
@@ -1078,19 +1079,19 @@ export default function App() {
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-slate-500">กำไรใหม่ต่อเดือน</span>
                         <span className="text-xl font-black text-emerald-600">
-                          {formatCurrency(calculation.profitPerMonth + (calculation.emptyTripLoss * currentJob.tripsPerMonth * (0.2 - simTarget / 100)))}
+                          {formatCurrency(calculation.profitPerMonth + (Math.max(0, currentJob.emptyTripsPerMonth - (currentJob.tripsPerMonth * (simTarget / 100))) * calculation.profitPerTrip))}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-slate-500">ต้นทุนต่อเที่ยวใหม่</span>
                         <span className="text-lg font-bold text-slate-900">
-                          {formatCurrency(calculation.totalCostPerTrip - (calculation.emptyTripLoss * (0.2 - simTarget / 100)))}
+                          {formatCurrency(calculation.totalCostPerTrip - (Math.max(0, currentJob.emptyTripsPerMonth - (currentJob.tripsPerMonth * (simTarget / 100))) * calculation.profitPerTrip / (currentJob.tripsPerMonth || 1)))}
                         </span>
                       </div>
                       <div className="bg-emerald-50 p-3 rounded-xl flex justify-between items-center border border-emerald-100">
                         <span className="text-xs font-bold text-emerald-700 uppercase">ส่วนต่างกำไรที่เพิ่มขึ้น</span>
                         <span className="text-lg font-black text-emerald-600">
-                          +{formatCurrency(calculation.emptyTripLoss * currentJob.tripsPerMonth * (0.2 - simTarget / 100))}
+                          +{formatCurrency(Math.max(0, currentJob.emptyTripsPerMonth - (currentJob.tripsPerMonth * (simTarget / 100))) * calculation.profitPerTrip)}
                         </span>
                       </div>
                     </div>
@@ -1099,10 +1100,10 @@ export default function App() {
                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                       <div className="flex gap-3">
                         <Info className="w-5 h-5 text-indigo-600 shrink-0" />
-                        <p className="text-xs font-medium text-indigo-800 leading-relaxed">
+                        <div className="text-xs font-medium text-indigo-800 leading-relaxed">
                           <span className="font-bold block mb-1">คำแนะนำ:</span>
-                          หากคุณสามารถลดเที่ยวเปล่าได้เพียง 1–2 เที่ยว/เดือน กำไรของคุณจะเพิ่มขึ้นอย่างมีนัยสำคัญ โดยไม่ต้องลงทุนเพิ่มจำนวนรถหรือจ้างคนขับเพิ่ม
-                        </p>
+                          ปัจจุบันคุณมีเที่ยวเปล่าประมาณ {currentJob.tripsPerMonth > 0 ? ((currentJob.emptyTripsPerMonth / currentJob.tripsPerMonth) * 100).toFixed(0) : 0}% ของการวิ่งทั้งหมด หากสามารถลดเที่ยวเปล่าลง จะช่วยเพิ่มกำไรได้
+                        </div>
                       </div>
                     </div>
                   </Card>
@@ -1142,13 +1143,6 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InputField 
-                    id="setting-truck-count"
-                    label="จำนวนรถในทีม" 
-                    suffix="คัน"
-                    value={settings.truckCount} 
-                    onChange={(val: number) => setSettings(prev => ({ ...prev, truckCount: val }))} 
-                  />
                   <InputField 
                     id="setting-fuel-price"
                     label="ราคาน้ำมันอ้างอิง" 
